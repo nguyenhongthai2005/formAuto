@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tool Tự động Điền Google Form (Spring Boot & Thymeleaf)</title>
+    <!-- Tải Tailwind CSS để có giao diện đẹp -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7f7;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 flex items-center justify-center min-h-screen">
+
+<div class="mx-auto p-4 md:p-8 max-w-lg w-full">
+    <div class="bg-white p-6 md:p-10 rounded-xl shadow-2xl border border-blue-100">
+        <h1 class="text-3xl font-extrabold text-gray-800 mb-6 border-b pb-3 text-center">
+            🤖 Google Form Spammer
+        </h1>
+        <p class="text-sm text-gray-600 mb-6">
+            Sử dụng Thymeleaf (Frontend) để gọi API Spring Boot (Backend) thực hiện tự động hóa với Playwright.
+        </p>
+
+        <form id="spamForm" class="space-y-6">
+
+            <div>
+                <label for="formUrl" class="block text-sm font-medium text-gray-700 mb-2">
+                    URL Google Form Công khai
+                </label>
+                <input type="url" id="formUrl" required
+                       value="https://docs.google.com/forms/d/e/1FAIpQLScXG30q5h_wX4Fv7O4JcM8f0vP-Oq1kY7lA-Yg4nE/viewform"
+                       placeholder="Nhập link Form, ví dụ: https://docs.google.com/forms/d/e/..."
+                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150 shadow-inner">
+                <p class="text-xs text-gray-500 mt-1">Sử dụng URL `viewform`.</p>
+            </div>
+
+            <div>
+                <label for="numSubmissions" class="block text-sm font-medium text-gray-700 mb-2">
+                    Số lần gửi tự động (N)
+                </label>
+                <input type="number" id="numSubmissions" required min="1" max="100" value="3"
+                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150 shadow-inner">
+                <p class="text-xs text-gray-500 mt-1">Khuyến nghị không quá 10 lần cho mục đích thử nghiệm.</p>
+            </div>
+
+            <button type="submit" id="submitBtn"
+                    class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-lg transform transition duration-200 ease-in-out hover:scale-[1.01] active:scale-[0.98] disabled:bg-gray-400 disabled:cursor-not-allowed">
+                BẮT ĐẦU TỰ ĐỘNG GỬI
+            </button>
+        </form>
+
+        <!-- Khung hiển thị kết quả -->
+        <div id="message" class="mt-8 p-4 rounded-lg text-sm transition-opacity duration-300 opacity-0 hidden"></div>
+    </div>
+</div>
+
+<!-- JavaScript để gọi API Spring Boot -->
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const form = document.getElementById('spamForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const messageDiv = document.getElementById('message');
+
+        // API endpoint mà bạn đã định nghĩa trong FormController
+        const API_URL = '/api/form/submit';
+
+        // Hàm hiển thị thông báo
+        function showMessage(text, isError = false) {
+            messageDiv.textContent = text;
+            messageDiv.classList.remove('hidden', 'opacity-0');
+            messageDiv.classList.add('opacity-100');
+            if (isError) {
+                messageDiv.className = 'mt-8 p-4 rounded-lg text-sm transition-opacity duration-300 opacity-100 bg-red-100 text-red-700 font-medium';
+            } else {
+                messageDiv.className = 'mt-8 p-4 rounded-lg text-sm transition-opacity duration-300 opacity-100 bg-green-100 text-green-700 font-medium';
+            }
+        }
+
+        // Hàm ẩn thông báo
+        function hideMessage() {
+            messageDiv.classList.remove('opacity-100');
+            messageDiv.classList.add('opacity-0');
+            setTimeout(() => {
+                messageDiv.classList.add('hidden');
+            }, 300);
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideMessage();
+
+            const formUrl = document.getElementById('formUrl').value;
+            const numSubmissions = parseInt(document.getElementById('numSubmissions').value);
+
+            if (!formUrl || numSubmissions <= 0) {
+                showMessage("Vui lòng nhập đầy đủ và chính xác thông tin.", true);
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Đang xử lý... (Kiểm tra Console Spring Boot)';
+            showMessage("Đang gửi yêu cầu đến Backend. Quá trình tự động hóa đã bắt đầu.", false);
+
+            const payload = {
+                formUrl: formUrl,
+                numSubmissions: numSubmissions
+            };
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const responseText = await response.text();
+
+                if (response.ok) {
+                    showMessage(`✅ THÀNH CÔNG: ${responseText}`, false);
+                } else {
+                    // Xử lý lỗi từ Backend (4xx hoặc 5xx)
+                    showMessage(`❌ LỖI [${response.status}]: ${responseText}`, true);
+                }
+            } catch (error) {
+                // Lỗi không thể kết nối tới Backend (rất hiếm trong Thymeleaf vì cùng server)
+                console.error('Lỗi kết nối API:', error);
+                showMessage(`LỖI HỆ THỐNG: Không thể gọi API ${API_URL}. Chi tiết xem trong console.`, true);
+            } finally {
+                submitBtn.textContent = 'BẮT ĐẦU TỰ ĐỘNG GỬI';
+                submitBtn.disabled = false;
+            }
+        });
+    });
+</script>
+</body>
+</html>
