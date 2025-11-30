@@ -2,14 +2,14 @@ package com.example.formauto.model;
 
 public class FormRequest {
     private String formUrl;
-    private int numSubmissions;
 
+    // Constructor không tham số
     public FormRequest() {
     }
 
-    public FormRequest(String formUrl, int numSubmissions) {
+    // Constructor có tham số
+    public FormRequest(String formUrl) {
         this.formUrl = formUrl;
-        this.numSubmissions = numSubmissions;
     }
 
     // Getters và Setters
@@ -19,13 +19,5 @@ public class FormRequest {
 
     public void setFormUrl(String formUrl) {
         this.formUrl = formUrl;
-    }
-
-    public int getNumSubmissions() {
-        return numSubmissions;
-    }
-
-    public void setNumSubmissions(int numSubmissions) {
-        this.numSubmissions = numSubmissions;
     }
 }
