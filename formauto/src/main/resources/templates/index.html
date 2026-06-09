@@ -336,17 +336,35 @@
 
         el.questionsList.innerHTML = '';
 
+        let currentRenderedPage = -1;
+
         questions.forEach((q, index) => {
+            const qPageIndex = q.pageIndex || 1;
+
+            if (qPageIndex !== currentRenderedPage) {
+                currentRenderedPage = qPageIndex;
+                // Render tiêu đề phân chia trang
+                const pageHeaderHtml = `
+                    <div class="mt-6 mb-3 flex items-center gap-2 border-b pb-2 sticky top-0 bg-gray-50 z-10 py-1">
+                        <span class="bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm flex items-center gap-1">
+                            <i class="fa-solid fa-file-lines"></i> Trang ${currentRenderedPage}
+                        </span>
+                        <div class="h-[1px] bg-gray-200 flex-1"></div>
+                    </div>
+                `;
+                el.questionsList.innerHTML += pageHeaderHtml;
+            }
+
             const contentHtml = renderQuestionContent(q, index);
 
             const html = `
-                <div class="bg-white p-4 rounded border border-gray-200 shadow-sm relative">
+                <div class="bg-white p-4 rounded border border-gray-200 shadow-sm relative mb-3 hover:border-blue-300 transition duration-150">
                     <span
-                        class="absolute top-2 right-2 text-[10px] font-bold text-gray-400 bg-gray-100 px-1 rounded"
+                        class="absolute top-2 right-2 text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded"
                     >
-                        ${q.type}
+                        Trang ${qPageIndex} | ${q.type}
                     </span>
-                    <h3 class="font-semibold text-gray-800 text-sm">
+                    <h3 class="font-semibold text-gray-800 text-sm pr-20">
                         Câu ${index + 1}: ${q.title}
                     </h3>
                     ${contentHtml}

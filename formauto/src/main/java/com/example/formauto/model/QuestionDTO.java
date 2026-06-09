@@ -4,7 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class QuestionDTO {
-    private int index;              // Số thứ tự câu hỏi
+    private int index;              // Số thứ tự câu hỏi cục bộ trên trang
+    private int pageIndex;          // Số trang (1-based)
     private String title;           // Tiêu đề câu hỏi
     private String type;            // RADIO, CHECKBOX, TEXT
     private List<OptionDTO> options = new ArrayList<>();
@@ -16,6 +17,8 @@ public class QuestionDTO {
     // Getters & Setters
     public int getIndex() { return index; }
     public void setIndex(int index) { this.index = index; }
+    public int getPageIndex() { return pageIndex; }
+    public void setPageIndex(int pageIndex) { this.pageIndex = pageIndex; }
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
     public String getType() { return type; }

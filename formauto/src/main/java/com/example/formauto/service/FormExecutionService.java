@@ -33,6 +33,30 @@ public class FormExecutionService {
     private static final String[] TEN_NAM = {"Nam", "Hùng", "Tuấn", "Dũng", "Minh", "Hiếu", "Quân", "Long", "Phúc", "Khang", "Bảo", "Đạt", "Sơn", "Huy", "Hoàng", "Thắng"};
     private static final String[] TEN_NU = {"Linh", "Trang", "Lan", "Hương", "Mai", "Hoa", "Thảo", "Hà", "Yến", "Nga", "Vân", "Dung", "Tâm", "Huyền", "Vy", "Anh"};
 
+    // --- DATA FEEDBACK ---
+    private static final String[] ANS_GOP_Y = {
+            "Mình thấy dịch vụ rất tốt, hy vọng thương hiệu sẽ giữ vững phong độ.",
+            "Nên có thêm nhiều chương trình ưu đãi hoặc coupon cho khách hàng thân thiết.",
+            "Sản phẩm chất lượng tốt, mong cửa hàng cập nhật thêm nhiều hương vị mới.",
+            "Mọi thứ hiện tại đều rất ổn, quy trình mua sắm rất nhanh chóng và tiện lợi.",
+            "Cần đẩy mạnh dịch vụ giao hàng nhanh hơn vào các khung giờ cao điểm."
+    };
+
+    private static final String[] ANS_LY_DO = {
+            "Vì chất lượng sản phẩm luôn ổn định, hương vị thơm ngon đặc trưng.",
+            "Thái độ phục vụ của nhân viên cực kỳ nhiệt tình, chu đáo và thân thiện.",
+            "Thương hiệu uy tín, quy trình đóng gói sạch sẽ và đảm bảo vệ sinh.",
+            "Mức giá hợp lý, nhiều chương trình khuyến mãi hấp dẫn và giao hàng siêu tốc.",
+            "Trải nghiệm mua sắm online rất mượt mà, nhân viên hỗ trợ nhiệt tình."
+    };
+
+    private static final String[] ANS_CHUNG = {
+            "Rất hài lòng với trải nghiệm sản phẩm và dịch vụ tại đây.",
+            "Sản phẩm dùng rất ổn, sẽ giới thiệu cho bạn bè và người thân cùng sử dụng.",
+            "Đánh giá 5 sao cho chất lượng sản phẩm và thái độ của đội ngũ.",
+            "Mọi thứ đều hoàn hảo, cảm ơn thương hiệu rất nhiều."
+    };
+
     public void executeAutoFill(String url, List<QuestionDTO> configQuestions, int quantity) {
         if (configQuestions == null || configQuestions.isEmpty()) {
             log.error("❌ Danh sách câu hỏi bị TRỐNG, hủy auto-fill.");
@@ -57,7 +81,8 @@ public class FormExecutionService {
 
                 try {
                     page.navigate(url);
-                    page.waitForLoadState(LoadState.NETWORKIDLE);
+                    page.waitForLoadState(LoadState.LOAD);
+                    try { page.waitForSelector(QUESTION_BLOCK, new Page.WaitForSelectorOptions().setTimeout(5000)); } catch (Exception ignored) {}
 
                     if (page.title().contains("Đăng nhập")) {
                         log.warn("⛔ Form yêu cầu đăng nhập – bỏ qua lần {}", i);
@@ -101,8 +126,8 @@ public class FormExecutionService {
             page.keyboard().press("End");
             try { Thread.sleep(500); } catch (InterruptedException ignored) {}
 
-            // 1. Điền dữ liệu
-            fillCurrentPage(page, configQuestions);
+            // 1. Điền dữ liệu cho trang hiện tại
+            fillCurrentPage(page, configQuestions, currentPage);
 
             // 2. Tìm nút điều hướng
             Locator btn = findNavigationButton(page);
@@ -111,7 +136,9 @@ public class FormExecutionService {
             String btnText = btn.textContent().trim();
             boolean isSubmitBtn = isSubmitButton(btnText);
 
-            log.debug("🖱️ Click nút [{}]", btnText);
+            log.debug("🖱️ Click nút [{}] trên trang {}", btnText, currentPage);
+
+            String firstQTitleBefore = getFirstQuestionTitle(page);
 
             try {
                 btn.click(new Locator.ClickOptions().setForce(true));
@@ -120,12 +147,19 @@ public class FormExecutionService {
             }
 
             try {
-                page.waitForLoadState(LoadState.NETWORKIDLE);
+                page.waitForLoadState(LoadState.LOAD);
                 Thread.sleep(2000);
+                page.waitForSelector(QUESTION_BLOCK, new Page.WaitForSelectorOptions().setTimeout(3000));
             } catch (Exception ignored) {}
 
             if (isSubmitBtn) return true;
             if (isSuccessPage(page)) return true;
+
+            String firstQTitleAfter = getFirstQuestionTitle(page);
+            if (firstQTitleBefore != null && firstQTitleBefore.equals(firstQTitleAfter)) {
+                log.error("❌ Không thể chuyển trang từ trang {}. Có thể do lỗi validation thiếu trường bắt buộc.", currentPage);
+                return false;
+            }
 
             currentPage++;
         }
@@ -133,12 +167,33 @@ public class FormExecutionService {
         return false;
     }
 
-    private void fillCurrentPage(Page page, List<QuestionDTO> configQuestions) {
+    private String getFirstQuestionTitle(Page page) {
+        try {
+            Locator blocks = page.locator(QUESTION_BLOCK);
+            if (blocks.count() > 0) {
+                return blocks.nth(0).locator("div[role='heading']").first().textContent().trim();
+            }
+        } catch (Exception e) {
+            return null;
+        }
+        return null;
+    }
+
+    private void fillCurrentPage(Page page, List<QuestionDTO> configQuestions, int currentPage) {
         Locator pageBlocks = page.locator(QUESTION_BLOCK);
 
         for (QuestionDTO qConfig : configQuestions) {
+            // Lọc các câu hỏi thuộc trang hiện tại (mặc định <= 0 là trang 1)
+            int qPageIndex = qConfig.getPageIndex() <= 0 ? 1 : qConfig.getPageIndex();
+            if (qPageIndex != currentPage) continue;
 
-            Locator block = pageBlocks.nth(qConfig.getIndex());
+            int localIndex = qConfig.getIndex();
+            if (localIndex < 0 || localIndex >= pageBlocks.count()) {
+                log.warn("⚠️ Index cục bộ {} vượt quá số lượng block {} trên trang {}", localIndex, pageBlocks.count(), currentPage);
+                continue;
+            }
+
+            Locator block = pageBlocks.nth(localIndex);
             if (block.count() == 0 || !block.isVisible()) continue;
 
             String type = qConfig.getType();
@@ -149,33 +204,81 @@ public class FormExecutionService {
                 OptionDTO selected = randomizer.next();
 
                 if (selected != null) {
-                    Locator option = block.locator("div[role='radio'][aria-label='" + selected.getText() + "']");
-                    if (option.count() == 0) option = block.locator("div[role='radio'][data-value='" + selected.getValue() + "']");
-                    if (option.isVisible()) option.click(new Locator.ClickOptions().setForce(true));
+                    int optIndex = selected.getDomIndex();
+                    if (optIndex >= 0) {
+                        Locator option = block.locator("div[role='radio']").nth(optIndex);
+                        if (option.isVisible()) {
+                            option.click(new Locator.ClickOptions().setForce(true));
+                            if ("__other_option__".equals(selected.getValue())) {
+                                Locator otherInput = block.locator("input[type='text']:not([type='hidden'])");
+                                if (otherInput.count() > 0 && otherInput.first().isVisible()) {
+                                    otherInput.first().fill("Lý do khác " + random.nextInt(100));
+                                }
+                            }
+                        }
+                    }
                 }
             }
             // CHECKBOX
             else if ("CHECKBOX".equals(type)) {
-                for (OptionDTO opt : qConfig.getOptions()) {
+                List<OptionDTO> options = qConfig.getOptions();
+                Locator checkLocators = block.locator("div[role='checkbox']");
+                
+                boolean clickedAny = false;
+                for (int i = 0; i < options.size(); i++) {
+                    OptionDTO opt = options.get(i);
                     int chance = random.nextInt(100);
-                    Locator option = block.locator("div[role='checkbox'][aria-label='" + opt.getText() + "']");
-                    if (option.count() == 0) option = block.locator("div[role='checkbox'][data-value='" + opt.getValue() + "']");
+                    
+                    int optIndex = opt.getDomIndex();
+                    if (optIndex >= checkLocators.count()) break;
+                    Locator option = checkLocators.nth(optIndex);
 
                     if (option.isVisible()) {
-                        if (opt.getText() == null || opt.getText().isEmpty()) continue;
                         boolean checked = "true".equals(option.getAttribute("aria-checked"));
-
                         if (chance < opt.getWeight()) {
-                            if (!checked) option.click(new Locator.ClickOptions().setForce(true));
+                            clickedAny = true; // Sẽ được check
+                            if (!checked) {
+                                option.click(new Locator.ClickOptions().setForce(true));
+                                if ("__other_option__".equals(opt.getValue())) {
+                                    Locator otherInput = block.locator("input[type='text']:not([type='hidden'])");
+                                    if (otherInput.count() > 0 && otherInput.first().isVisible()) {
+                                        otherInput.first().fill("Lý do khác " + random.nextInt(100));
+                                    }
+                                }
+                            }
                         } else {
-                            if (checked) option.click(new Locator.ClickOptions().setForce(true));
+                            if (checked) {
+                                option.click(new Locator.ClickOptions().setForce(true)); // Bỏ check
+                            }
+                        }
+                    }
+                }
+                
+                if (!clickedAny && options.size() > 0) {
+                    java.util.List<OptionDTO> validOptions = options.stream().filter(o -> o.getWeight() > 0).collect(java.util.stream.Collectors.toList());
+                    if (validOptions.isEmpty()) validOptions = options;
+                    OptionDTO fallbackOpt = validOptions.get(random.nextInt(validOptions.size()));
+                    int optIndex = fallbackOpt.getDomIndex();
+                    if (optIndex < checkLocators.count()) {
+                        Locator option = checkLocators.nth(optIndex);
+                        if (option.isVisible()) {
+                            boolean checked = "true".equals(option.getAttribute("aria-checked"));
+                            if (!checked) {
+                                option.click(new Locator.ClickOptions().setForce(true));
+                                if ("__other_option__".equals(fallbackOpt.getValue())) {
+                                    Locator otherInput = block.locator("input[type='text']:not([type='hidden'])");
+                                    if (otherInput.count() > 0 && otherInput.first().isVisible()) {
+                                        otherInput.first().fill("Lý do khác " + random.nextInt(100));
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
             // TEXT
             else if ("TEXT".equals(type)) {
-                Locator input = block.locator("input:not([type='hidden']), textarea").first();
+                Locator input = block.locator("input[type='text']:not([style*='display: none']), input:not([type]), textarea").first();
                 if (input.isVisible() && input.inputValue().isEmpty()) {
 
                     String title = qConfig.getTitle().toLowerCase();
@@ -259,8 +362,8 @@ public class FormExecutionService {
 
     private Locator findNavigationButton(Page page) {
 
-        List<String> banned = Arrays.asList("Xóa", "Clear", "Hủy", "Cancel", "Back", "Quay lại");
-        List<String> priority = Arrays.asList("Gửi", "Submit", "Tiếp", "Next", "Send");
+        List<String> banned = Arrays.asList("xoa", "clear", "huy", "cancel", "back", "quay lai");
+        List<String> priority = Arrays.asList("gui", "submit", "tiep", "next", "send", "tiep tuc");
 
         Locator allButtons = page.locator("div[role='button']");
         int count = allButtons.count();
@@ -272,16 +375,17 @@ public class FormExecutionService {
             if (!btn.isVisible()) continue;
 
             String text = btn.textContent().trim();
+            String normText = removeAccents(text).toLowerCase();
 
             boolean isBanned = false;
             for (String b : banned)
-                if (text.toLowerCase().contains(b.toLowerCase()))
+                if (normText.contains(b))
                     isBanned = true;
 
             if (isBanned) continue;
 
             for (String p : priority)
-                if (text.equalsIgnoreCase(p) || text.toLowerCase().contains(p.toLowerCase()))
+                if (normText.equals(p) || normText.contains(p))
                     return btn;
 
             bestCandidate = btn;
@@ -322,7 +426,15 @@ public class FormExecutionService {
         if (t.contains("tuổi") || t.contains("age"))
             return String.valueOf(random.nextInt(18, 40));
 
-        return "Câu trả lời " + random.nextInt(100);
+        if (t.contains("góp ý") || t.contains("cải thiện") || t.contains("nhận xét") || t.contains("feedback") || t.contains("ý kiến") || t.contains("improve")) {
+            return "Không";
+        }
+
+        if (t.contains("yếu tố") || t.contains("lý do") || t.contains("tiếp tục") || t.contains("tương lai") || t.contains("lựa chọn") || t.contains("why") || t.contains("reason")) {
+            return ANS_LY_DO[random.nextInt(ANS_LY_DO.length)];
+        }
+
+        return ANS_CHUNG[random.nextInt(ANS_CHUNG.length)];
     }
 
     private String generateRandomName() {

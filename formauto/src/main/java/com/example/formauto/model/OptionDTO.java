@@ -4,12 +4,14 @@ public class OptionDTO {
     private String text;        // Chữ hiển thị (VD: Nam)
     private String value;       // Giá trị ẩn (data-value) dùng để tìm element click
     private double weight;      // Trọng số % (VD: 70.0)
+    private int domIndex;       // Vị trí index thật trên giao diện HTML
 
     public OptionDTO() {}
 
-    public OptionDTO(String text, String value) {
+    public OptionDTO(String text, String value, int domIndex) {
         this.text = text;
         this.value = value;
+        this.domIndex = domIndex;
         this.weight = 0; // Mặc định 0
     }
 
@@ -20,4 +22,6 @@ public class OptionDTO {
     public void setValue(String value) { this.value = value; }
     public double getWeight() { return weight; }
     public void setWeight(double weight) { this.weight = weight; }
+    public int getDomIndex() { return domIndex; }
+    public void setDomIndex(int domIndex) { this.domIndex = domIndex; }
 }

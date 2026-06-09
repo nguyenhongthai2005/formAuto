@@ -11,7 +11,10 @@ public class WeightedRandom {
     private final Random random;
     private double total = 0;
 
+    private final List<OptionDTO> options;
+
     public WeightedRandom(List<OptionDTO> options) {
+        this.options = options;
         this.random = new Random();
         // Xây dựng bản đồ trọng số
         for (OptionDTO opt : options) {
@@ -23,7 +26,11 @@ public class WeightedRandom {
     }
 
     public OptionDTO next() {
-        if (total == 0) return null; // Không có trọng số nào được set
+        if (options == null || options.isEmpty()) return null;
+        if (total == 0) {
+            // Nếu không có trọng số nào, chọn ngẫu nhiên 1 mục để tránh bỏ trống (lỗi required)
+            return options.get(random.nextInt(options.size()));
+        }
         double value = random.nextDouble() * total;
         return map.higherEntry(value).getValue();
     }
