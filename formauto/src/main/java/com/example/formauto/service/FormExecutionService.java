@@ -256,19 +256,21 @@ public class FormExecutionService {
                 
                 if (!clickedAny && options.size() > 0) {
                     java.util.List<OptionDTO> validOptions = options.stream().filter(o -> o.getWeight() > 0).collect(java.util.stream.Collectors.toList());
-                    if (validOptions.isEmpty()) validOptions = options;
-                    OptionDTO fallbackOpt = validOptions.get(random.nextInt(validOptions.size()));
-                    int optIndex = fallbackOpt.getDomIndex();
-                    if (optIndex < checkLocators.count()) {
-                        Locator option = checkLocators.nth(optIndex);
-                        if (option.isVisible()) {
-                            boolean checked = "true".equals(option.getAttribute("aria-checked"));
-                            if (!checked) {
-                                option.click(new Locator.ClickOptions().setForce(true));
-                                if ("__other_option__".equals(fallbackOpt.getValue())) {
-                                    Locator otherInput = block.locator("input[type='text']:not([type='hidden'])");
-                                    if (otherInput.count() > 0 && otherInput.first().isVisible()) {
-                                        otherInput.first().fill("Lý do khác " + random.nextInt(100));
+                    
+                    if (!validOptions.isEmpty()) {
+                        OptionDTO fallbackOpt = validOptions.get(random.nextInt(validOptions.size()));
+                        int optIndex = fallbackOpt.getDomIndex();
+                        if (optIndex < checkLocators.count()) {
+                            Locator option = checkLocators.nth(optIndex);
+                            if (option.isVisible()) {
+                                boolean checked = "true".equals(option.getAttribute("aria-checked"));
+                                if (!checked) {
+                                    option.click(new Locator.ClickOptions().setForce(true));
+                                    if ("__other_option__".equals(fallbackOpt.getValue())) {
+                                        Locator otherInput = block.locator("input[type='text']:not([type='hidden'])");
+                                        if (otherInput.count() > 0 && otherInput.first().isVisible()) {
+                                            otherInput.first().fill("Lý do khác " + random.nextInt(100));
+                                        }
                                     }
                                 }
                             }
