@@ -260,6 +260,12 @@
                     ${opt.text}
                 </span>
                 <div class="flex items-center gap-1">
+                    <button type="button" 
+                            class="text-red-500 hover:text-red-700 hover:scale-110 transition-transform text-sm mr-1" 
+                            title="Loại bỏ mục này (0%), chia đều các mục còn lại" 
+                            onclick="setZeroAndDistribute(${qIndex}, ${optIndex})">
+                        <i class="fa-solid fa-ban"></i>
+                    </button>
                     <input
                         type="number"
                         class="weight-input w-16 p-1 text-sm border rounded text-center focus:border-blue-500 outline-none"
@@ -422,6 +428,37 @@
             ) {
                 globalQuestions[qIdx].options[optIdx].weight = val;
             }
+        });
+    }
+
+    function setZeroAndDistribute(qIdx, targetOptIdx) {
+        const inputs = Array.from(document.querySelectorAll(`.weight-input[data-q-index="${qIdx}"]`));
+        
+        const targetInput = inputs.find(i => Number(i.dataset.optIndex) === targetOptIdx);
+        if (targetInput) {
+            targetInput.value = 0;
+        }
+
+        // Tìm các input còn lại đang > 0
+        let eligibleInputs = inputs.filter(i => Number(i.dataset.optIndex) !== targetOptIdx && Number(i.value) > 0);
+        
+        // Nếu tất cả các mục khác đều đã bằng 0, thì chia đều lại cho tất cả các mục khác đó
+        if (eligibleInputs.length === 0) {
+            eligibleInputs = inputs.filter(i => Number(i.dataset.optIndex) !== targetOptIdx);
+        }
+
+        if (eligibleInputs.length === 0) return; // Nếu form chỉ có đúng 1 đáp án
+
+        const evenWeight = Math.floor(100 / eligibleInputs.length);
+        let remainder = 100 - (evenWeight * eligibleInputs.length);
+
+        eligibleInputs.forEach(input => {
+            let weight = evenWeight;
+            if (remainder > 0) {
+                weight += 1;
+                remainder--;
+            }
+            input.value = weight;
         });
     }
 
