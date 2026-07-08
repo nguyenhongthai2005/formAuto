@@ -28,7 +28,8 @@ public class WeightedRandom {
     public OptionDTO next() {
         if (options == null || options.isEmpty()) return null;
         if (total <= 0) {
-            return null; // Tôn trọng lựa chọn 0% của user, không random tự động nữa
+            // Nếu người dùng lỡ để tất cả là 0%, bắt buộc phải chọn bừa 1 cái thay vì bỏ trống (tránh lỗi Validation)
+            return options.get(random.nextInt(options.size()));
         }
         double value = random.nextDouble() * total;
         return map.higherEntry(value).getValue();

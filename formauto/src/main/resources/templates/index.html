@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="vi" xmlns:th="http://www.thymeleaf.org">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,8 +8,10 @@
 
     <!-- Tailwind & Font Awesome -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <!-- PapaParse for CSV -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
     <style>
         body {
@@ -25,6 +28,7 @@
                 opacity: 0;
                 transform: translateY(10px);
             }
+
             to {
                 opacity: 1;
                 transform: translateY(0);
@@ -32,228 +36,238 @@
         }
     </style>
 </head>
+
 <body class="min-h-screen flex flex-col items-center py-10 px-4">
 
-<div class="max-w-3xl w-full bg-white rounded-2xl shadow-xl overflow-hidden">
-    <!-- HEADER -->
-    <div class="bg-blue-600 p-6 text-white text-center">
-        <h1 class="text-3xl font-bold">
-            <i class="fa-solid fa-robot"></i> Form Auto Bot
-        </h1>
-        <p class="opacity-90 mt-2">
-            Công cụ điền Google Form tự động theo tỷ lệ % mong muốn
-        </p>
-    </div>
-
-    <!-- CONTENT -->
-    <div class="p-8 space-y-8">
-
-        <!-- STEP 1: INPUT URL -->
-        <div id="step1-container">
-            <label class="block text-gray-700 font-bold mb-2">
-                Bước 1: Nhập Link Google Form
-            </label>
-
-            <div class="flex gap-2">
-                <input
-                        type="text"
-                        id="urlInput"
-                        placeholder="https://docs.google.com/forms/d/e/.../viewform"
-                        class="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                        value="https://docs.google.com/forms/d/e/1FAIpQLScXG30q5h_wX4Fv7O4JcM8f0vP-Oq1kY7lA-Yg4nE/viewform"
-                />
-
-                <button
-                        id="btnAnalyze"
-                        type="button"
-                        onclick="analyzeForm()"
-                        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition flex items-center gap-2"
-                >
-                    <span id="analyzeSpinner" class="hidden">
-                        <i class="fa-solid fa-spinner fa-spin"></i>
-                    </span>
-                    <span>Phân tích</span>
-                </button>
-            </div>
-
-            <p class="text-xs text-gray-500 mt-1">
-                Hệ thống sẽ dùng Playwright (Headless) để quét câu hỏi.
+    <div class="max-w-3xl w-full bg-white rounded-2xl shadow-xl overflow-hidden">
+        <!-- HEADER -->
+        <div class="bg-blue-600 p-6 text-white text-center">
+            <h1 class="text-3xl font-bold">
+                <i class="fa-solid fa-robot"></i> Form Auto Bot
+            </h1>
+            <p class="opacity-90 mt-2">
+                Công cụ điền Google Form tự động theo tỷ lệ % mong muốn
             </p>
         </div>
 
-        <!-- STEP 2: CONFIG QUESTIONS -->
-        <div id="step2-container" class="hidden fade-in border-t pt-6">
-            <div class="flex justify-between items-center mb-4">
-                <label class="block text-gray-700 font-bold text-lg">
-                    Bước 2: Cấu hình tỷ lệ điền
+        <!-- CONTENT -->
+        <div class="p-8 space-y-8">
+
+            <!-- STEP 1: INPUT URL -->
+            <div id="step1-container">
+                <label class="block text-gray-700 font-bold mb-2">
+                    Bước 1: Nhập Link Google Form
                 </label>
 
-                <button
-                        type="button"
-                        onclick="resetStep()"
-                        class="text-sm text-red-500 hover:underline"
-                >
-                    Quét link khác
-                </button>
-            </div>
+                <div class="flex gap-2">
+                    <input type="text" id="urlInput" placeholder="https://docs.google.com/forms/d/e/.../viewform"
+                        class="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                        value="https://docs.google.com/forms/d/e/1FAIpQLScXG30q5h_wX4Fv7O4JcM8f0vP-Oq1kY7lA-Yg4nE/viewform" />
 
-            <div
-                    id="questionsList"
-                    class="space-y-4 max-h-[400px] overflow-y-auto pr-2 mb-6 border rounded-lg p-4 bg-gray-50"
-            >
-                <p class="text-gray-400 text-center italic">Chưa có dữ liệu...</p>
-            </div>
-
-            <div
-                    class="bg-blue-50 p-4 rounded-lg mb-6 flex items-center justify-between"
-            >
-                <div>
-                    <label class="font-semibold text-gray-700">
-                        Số lần chạy (Submissions):
-                    </label>
-                    <p class="text-xs text-gray-500">
-                        Tool sẽ mở trình duyệt và điền lần lượt.
-                    </p>
+                    <button id="btnAnalyze" type="button" onclick="analyzeForm()"
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition flex items-center gap-2">
+                        <span id="analyzeSpinner" class="hidden">
+                            <i class="fa-solid fa-spinner fa-spin"></i>
+                        </span>
+                        <span>Phân tích</span>
+                    </button>
                 </div>
 
-                <input
-                        type="number"
-                        id="quantityInput"
-                        value="1"
-                        min="1"
-                        max="50"
-                        class="w-24 p-2 border border-blue-300 rounded text-center font-bold text-blue-700 focus:ring-2 focus:ring-blue-500 outline-none"
-                />
+                <p class="text-xs text-gray-500 mt-1">
+                    Hệ thống sẽ dùng Playwright (Headless) để quét câu hỏi.
+                </p>
             </div>
 
-            <button
-                    id="btnExecute"
-                    type="button"
-                    onclick="executeBot()"
-                    class="w-full bg-green-600 hover:bg-green-700 text-white text-lg py-4 rounded-xl font-bold shadow-lg transition transform hover:scale-[1.01] flex justify-center items-center gap-2"
-            >
-                <span id="executeSpinner" class="hidden">
-                    <i class="fa-solid fa-spinner fa-spin"></i>
-                </span>
-                <span>BẮT ĐẦU AUTO ĐIỀN</span>
-            </button>
-        </div>
+            <!-- STEP 2: CONFIG QUESTIONS -->
+            <div id="step2-container" class="hidden fade-in border-t pt-6">
+                <div class="flex justify-between items-center mb-4">
+                    <label class="block text-gray-700 font-bold text-lg">
+                        Bước 2: Cấu hình tỷ lệ điền
+                    </label>
 
-        <!-- LOG AREA -->
-        <div
-                id="logArea"
-                class="hidden mt-4 p-4 bg-gray-900 text-green-400 font-mono text-sm rounded-lg h-32 overflow-y-auto"
-        >
-            <div>&gt; Ready.</div>
-        </div>
+                    <div class="flex items-center gap-3">
+                        <button type="button" onclick="document.getElementById('csvFileInput').click()"
+                            class="text-sm text-green-600 hover:bg-green-100 font-semibold bg-green-50 px-3 py-1.5 rounded border border-green-200 transition">
+                            <i class="fa-solid fa-file-csv"></i> Đồng bộ từ CSV
+                        </button>
+                        <input type="file" id="csvFileInput" accept=".csv" class="hidden"
+                            onchange="handleCSVUpload(event)">
 
+                        <button type="button" onclick="clearSession()"
+                            class="text-sm text-red-500 hover:bg-red-100 font-semibold bg-red-50 px-3 py-1.5 rounded border border-red-200 transition ml-2">
+                            <i class="fa-solid fa-trash"></i> Xoá dữ liệu
+                        </button>
+
+                        <button type="button" onclick="resetStep()" class="text-sm text-gray-500 hover:underline ml-2">
+                            Quét link khác
+                        </button>
+                    </div>
+                </div>
+
+                <div id="questionsList"
+                    class="space-y-4 max-h-[400px] overflow-y-auto pr-2 mb-6 border rounded-lg p-4 bg-gray-50">
+                    <p class="text-gray-400 text-center italic">Chưa có dữ liệu...</p>
+                </div>
+
+                <div class="bg-blue-50 p-4 rounded-lg mb-6 flex items-center justify-between">
+                    <div>
+                        <label class="font-semibold text-gray-700 block">
+                            Số lần chạy (Submissions):
+                        </label>
+                        <label class="flex items-center gap-2 mt-2 cursor-pointer">
+                            <input type="checkbox" id="fastModeCheckbox"
+                                class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
+                            <span class="text-sm font-bold text-red-600">⚡ Chạy ngầm siêu tốc (Đa luồng x5 tốc độ)</span>
+                        </label>
+                        <label class="flex items-center gap-2 mt-2 cursor-pointer">
+                            <input type="checkbox" id="useCakeShopDataCheckbox"
+                                class="w-4 h-4 text-pink-500 rounded focus:ring-pink-500">
+                            <span class="text-sm font-bold text-pink-600"><i class="fa-solid fa-cake-candles"></i> Dùng dữ liệu Tiệm bánh (Thực tế, văn phong ngắn gọn)</span>
+                        </label>
+                    </div>
+
+                    <input type="number" id="quantityInput" value="1" min="1" max="1000"
+                        class="w-24 p-2 border border-blue-300 rounded text-center font-bold text-blue-700 focus:ring-2 focus:ring-blue-500 outline-none" />
+                </div>
+
+                <div class="flex gap-4">
+                    <button id="btnExecute" type="button" onclick="executeBot()"
+                        class="flex-1 bg-green-600 hover:bg-green-700 text-white text-lg py-4 rounded-xl font-bold shadow-lg transition transform hover:scale-[1.01] flex justify-center items-center gap-2">
+                        <span id="executeSpinner" class="hidden">
+                            <i class="fa-solid fa-spinner fa-spin"></i>
+                        </span>
+                        <span>BẮT ĐẦU AUTO ĐIỀN</span>
+                    </button>
+
+                    <button id="btnCancel" type="button" onclick="cancelBot()"
+                        class="hidden bg-red-600 hover:bg-red-700 text-white text-lg px-8 py-4 rounded-xl font-bold shadow-lg transition flex justify-center items-center gap-2">
+                        <i class="fa-solid fa-stop"></i>
+                        <span>HUỶ BỎ</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- LOG AREA -->
+            <div id="logArea"
+                class="hidden mt-4 p-4 bg-gray-900 text-green-400 font-mono text-sm rounded-lg h-32 overflow-y-auto">
+                <div>&gt; Ready.</div>
+            </div>
+
+        </div>
     </div>
-</div>
 
-<script th:inline="javascript">
-    // ==========================
-    // DOM REFERENCES & CONSTANTS
-    // ==========================
-    const el = {
-        urlInput: document.getElementById('urlInput'),
-        btnAnalyze: document.getElementById('btnAnalyze'),
-        analyzeSpinner: document.getElementById('analyzeSpinner'),
-        step1: document.getElementById('step1-container'),
-        step2: document.getElementById('step2-container'),
-        questionsList: document.getElementById('questionsList'),
-        quantityInput: document.getElementById('quantityInput'),
-        btnExecute: document.getElementById('btnExecute'),
-        executeSpinner: document.getElementById('executeSpinner'),
-        logArea: document.getElementById('logArea')
-    };
+    <script th:inline="javascript">
+        // ==========================
+        // DOM REFERENCES & CONSTANTS
+        // ==========================
+        const el = {
+            urlInput: document.getElementById('urlInput'),
+            btnAnalyze: document.getElementById('btnAnalyze'),
+            analyzeSpinner: document.getElementById('analyzeSpinner'),
+            step1: document.getElementById('step1-container'),
+            step2: document.getElementById('step2-container'),
+            questionsList: document.getElementById('questionsList'),
+            quantityInput: document.getElementById('quantityInput'),
+            btnExecute: document.getElementById('btnExecute'),
+            executeSpinner: document.getElementById('executeSpinner'),
+            logArea: document.getElementById('logArea')
+        };
 
-    // URL API (Thymeleaf sẽ replace khi render, fallback giữ nguyên nếu chạy file tĩnh)
-    const API = {
-        ANALYZE_URL: /*[[@{/api/form/analyze}]]*/ '/api/form/analyze',
-        EXECUTE_URL: /*[[@{/api/form/execute}]]*/ '/api/form/execute'
-    };
+        // URL API (Thymeleaf sẽ replace khi render, fallback giữ nguyên nếu chạy file tĩnh)
+        const API = {
+            ANALYZE_URL: /*[[@{/api/form/analyze}]]*/ '/api/form/analyze',
+            EXECUTE_URL: /*[[@{/api/form/execute}]]*/ '/api/form/execute',
+            CANCEL_URL: /*[[@{/api/form/cancel}]]*/ '/api/form/cancel'
+        };
 
-    let globalQuestions = [];
+        let globalQuestions = [];
 
-    // ==========================
-    // LOG HELPER
-    // ==========================
-    function writeLog(message, cssClass) {
-        el.logArea.classList.remove('hidden');
-        el.logArea.innerHTML += `<div class="${cssClass}">&gt; ${message}</div>`;
-        el.logArea.scrollTop = el.logArea.scrollHeight;
-    }
-
-    const log = {
-        info(message) {
-            writeLog(message, 'text-green-400');
-        },
-        error(message) {
-            writeLog(message, 'text-red-400');
-        }
-    };
-
-    // ==========================
-    // UI STATE HELPERS
-    // ==========================
-    function setAnalyzeLoading(isLoading) {
-        el.btnAnalyze.disabled = isLoading;
-        el.analyzeSpinner.classList.toggle('hidden', !isLoading);
-    }
-
-    function setExecuteLoading(isLoading) {
-        el.btnExecute.disabled = isLoading;
-        el.executeSpinner.classList.toggle('hidden', !isLoading);
-        el.btnExecute.classList.toggle('opacity-75', isLoading);
-    }
-
-    function lockStep1() {
-        el.step1.classList.add('opacity-50', 'pointer-events-none');
-    }
-
-    function unlockStep1() {
-        el.step1.classList.remove('opacity-50', 'pointer-events-none');
-    }
-
-    function showStep2() {
-        el.step2.classList.remove('hidden');
-    }
-
-    function hideStep2() {
-        el.step2.classList.add('hidden');
-    }
-
-    // ==========================
-    // API HELPER
-    // ==========================
-    async function postJson(url, body) {
-        const res = await fetch(url, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(body)
-        });
-
-        if (!res.ok) {
-            const errorText = await res.text();
-            throw new Error(errorText || 'Request failed');
-        }
-        return res;
-    }
-
-    // ==========================
-    // RENDER HELPERS
-    // ==========================
-    function renderChoiceQuestion(question, qIndex) {
-        if (!Array.isArray(question.options) || question.options.length === 0) {
-            return '';
+        // ==========================
+        // LOG HELPER
+        // ==========================
+        function writeLog(message, cssClass) {
+            el.logArea.classList.remove('hidden');
+            el.logArea.innerHTML += `<div class="${cssClass}">&gt; ${message}</div>`;
+            el.logArea.scrollTop = el.logArea.scrollHeight;
         }
 
-        const defaultWeight = Math.floor(100 / (question.options.length || 1));
-        const iconClass = question.type === 'RADIO'
-            ? 'fa-circle-dot'
-            : 'fa-square-check';
+        const log = {
+            info(message) {
+                writeLog(message, 'text-green-400');
+            },
+            error(message) {
+                writeLog(message, 'text-red-400');
+            }
+        };
 
-        const optionsHtml = question.options.map((opt, optIndex) => `
+        // ==========================
+        // UI STATE HELPERS
+        // ==========================
+        function setAnalyzeLoading(isLoading) {
+            el.btnAnalyze.disabled = isLoading;
+            el.analyzeSpinner.classList.toggle('hidden', !isLoading);
+        }
+
+        function setExecuteLoading(isLoading) {
+            el.btnExecute.disabled = isLoading;
+            el.executeSpinner.classList.toggle('hidden', !isLoading);
+            el.btnExecute.classList.toggle('opacity-75', isLoading);
+
+            const btnCancel = document.getElementById('btnCancel');
+            if (btnCancel) {
+                btnCancel.classList.toggle('hidden', !isLoading);
+            }
+        }
+
+        function lockStep1() {
+            el.step1.classList.add('opacity-50', 'pointer-events-none');
+        }
+
+        function unlockStep1() {
+            el.step1.classList.remove('opacity-50', 'pointer-events-none');
+        }
+
+        function showStep2() {
+            el.step2.classList.remove('hidden');
+        }
+
+        function hideStep2() {
+            el.step2.classList.add('hidden');
+        }
+
+        // ==========================
+        // API HELPER
+        // ==========================
+        async function postJson(url, body) {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+
+            if (!res.ok) {
+                const errorText = await res.text();
+                throw new Error(errorText || 'Request failed');
+            }
+            return res;
+        }
+
+        // ==========================
+        // RENDER HELPERS
+        // ==========================
+        function renderChoiceQuestion(question, qIndex) {
+            if (!Array.isArray(question.options) || question.options.length === 0) {
+                return '';
+            }
+
+            const defaultWeight = Math.floor(100 / (question.options.length || 1));
+            const iconClass = question.type === 'RADIO'
+                ? 'fa-circle-dot'
+                : 'fa-square-check';
+
+            const optionsHtml = question.options.map((opt, optIndex) => {
+                const currentWeight = opt.weight !== undefined ? opt.weight : defaultWeight;
+                return `
             <div class="flex items-center gap-3 mt-2">
                 <span class="text-sm text-gray-600 flex-1 truncate" title="${opt.text}">
                     <i class="fa-regular ${iconClass} text-xs"></i>
@@ -268,27 +282,30 @@
                     </button>
                     <input
                         type="number"
-                        class="weight-input w-16 p-1 text-sm border rounded text-center focus:border-blue-500 outline-none"
+                        step="0.01"
+                        class="weight-input w-20 p-1 text-sm border rounded text-center focus:border-blue-500 outline-none"
                         data-q-index="${qIndex}"
                         data-opt-index="${optIndex}"
-                        value="${defaultWeight}"
+                        value="${currentWeight}"
                         min="0"
                         max="100"
+                        onchange="handleWeightInputChanged(this)"
                     />
                     <span class="text-xs text-gray-500">%</span>
                 </div>
             </div>
-        `).join('');
+        `;
+            }).join('');
 
-        return `
+            return `
             <div class="mt-2 pl-2 border-l-2 border-blue-200">
                 ${optionsHtml}
             </div>
         `;
-    }
+        }
 
-    function renderTextQuestion() {
-        return `
+        function renderTextQuestion() {
+            return `
             <div class="mt-2 pl-2 border-l-2 border-green-200">
                 <span class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
                     <i class="fa-solid fa-magic"></i>
@@ -296,10 +313,10 @@
                 </span>
             </div>
         `;
-    }
+        }
 
-    function renderDateQuestion() {
-        return `
+        function renderDateQuestion() {
+            return `
             <div class="mt-2 pl-2 border-l-2 border-purple-200">
                 <span class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">
                     <i class="fa-regular fa-calendar"></i>
@@ -307,10 +324,10 @@
                 </span>
             </div>
         `;
-    }
+        }
 
-    function renderTimeQuestion() {
-        return `
+        function renderTimeQuestion() {
+            return `
             <div class="mt-2 pl-2 border-l-2 border-orange-200">
                 <span class="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">
                     <i class="fa-regular fa-clock"></i>
@@ -318,39 +335,39 @@
                 </span>
             </div>
         `;
-    }
-
-    function renderQuestionContent(question, index) {
-        switch (question.type) {
-            case 'RADIO':
-            case 'CHECKBOX':
-                return renderChoiceQuestion(question, index);
-            case 'TEXT':
-                return renderTextQuestion();
-            case 'DATE':
-                return renderDateQuestion();
-            case 'TIME':
-                return renderTimeQuestion();
-            default:
-                return '';
         }
-    }
 
-    function renderConfigUI(questions) {
-        lockStep1();
-        showStep2();
+        function renderQuestionContent(question, index) {
+            switch (question.type) {
+                case 'RADIO':
+                case 'CHECKBOX':
+                    return renderChoiceQuestion(question, index);
+                case 'TEXT':
+                    return renderTextQuestion();
+                case 'DATE':
+                    return renderDateQuestion();
+                case 'TIME':
+                    return renderTimeQuestion();
+                default:
+                    return '';
+            }
+        }
 
-        el.questionsList.innerHTML = '';
+        function renderConfigUI(questions) {
+            lockStep1();
+            showStep2();
 
-        let currentRenderedPage = -1;
+            el.questionsList.innerHTML = '';
 
-        questions.forEach((q, index) => {
-            const qPageIndex = q.pageIndex || 1;
+            let currentRenderedPage = -1;
 
-            if (qPageIndex !== currentRenderedPage) {
-                currentRenderedPage = qPageIndex;
-                // Render tiêu đề phân chia trang
-                const pageHeaderHtml = `
+            questions.forEach((q, index) => {
+                const qPageIndex = q.pageIndex || 1;
+
+                if (qPageIndex !== currentRenderedPage) {
+                    currentRenderedPage = qPageIndex;
+                    // Render tiêu đề phân chia trang
+                    const pageHeaderHtml = `
                     <div class="mt-6 mb-3 flex items-center gap-2 border-b pb-2 sticky top-0 bg-gray-50 z-10 py-1">
                         <span class="bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm flex items-center gap-1">
                             <i class="fa-solid fa-file-lines"></i> Trang ${currentRenderedPage}
@@ -358,154 +375,401 @@
                         <div class="h-[1px] bg-gray-200 flex-1"></div>
                     </div>
                 `;
-                el.questionsList.innerHTML += pageHeaderHtml;
-            }
+                    el.questionsList.innerHTML += pageHeaderHtml;
+                }
 
-            const contentHtml = renderQuestionContent(q, index);
+                const contentHtml = renderQuestionContent(q, index);
 
-            const html = `
+                let fuzzButtonHtml = '';
+                if (q.type === 'RADIO' || q.type === 'CHECKBOX') {
+                    fuzzButtonHtml = `
+                    <button type="button" 
+                            class="text-orange-500 hover:text-orange-600 hover:scale-110 transition-transform ml-2 text-lg" 
+                            title="Làm ngẫu nhiên (Fuzz) các tỷ lệ % hiện tại" 
+                            onclick="randomizeFuzz(${index})">
+                        <i class="fa-solid fa-dice"></i>
+                    </button>
+                `;
+                }
+
+                const html = `
                 <div class="bg-white p-4 rounded border border-gray-200 shadow-sm relative mb-3 hover:border-blue-300 transition duration-150">
                     <span
                         class="absolute top-2 right-2 text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded"
                     >
                         Trang ${qPageIndex} | ${q.type}
                     </span>
-                    <h3 class="font-semibold text-gray-800 text-sm pr-20">
-                        Câu ${index + 1}: ${q.title}
-                    </h3>
+                    <div class="flex items-start pr-20">
+                        <h3 class="font-semibold text-gray-800 text-sm">
+                            Câu ${index + 1}: ${q.title}
+                        </h3>
+                        ${fuzzButtonHtml}
+                    </div>
                     ${contentHtml}
                 </div>
             `;
 
-            el.questionsList.innerHTML += html;
-        });
-    }
-
-    // ==========================
-    // BUSINESS LOGIC
-    // ==========================
-    async function analyzeForm() {
-        const url = el.urlInput.value.trim();
-        if (!url) {
-            alert('Vui lòng nhập URL!');
-            return;
+                el.questionsList.innerHTML += html;
+            });
         }
 
-        setAnalyzeLoading(true);
-        log.info('Đang kết nối Playwright để phân tích form...');
-
-        try {
-            const response = await postJson(API.ANALYZE_URL, {formUrl: url});
-            const questions = await response.json();
-            globalQuestions = Array.isArray(questions) ? questions : [];
-
-            if (globalQuestions.length === 0) {
-                log.error('Không tìm thấy câu hỏi nào. Kiểm tra lại Link hoặc Xpath.');
-            } else {
-                log.info(`Đã quét xong! Tìm thấy ${globalQuestions.length} câu hỏi.`);
-                renderConfigUI(globalQuestions);
+        // ==========================
+        // BUSINESS LOGIC
+        // ==========================
+        async function analyzeForm() {
+            const url = el.urlInput.value.trim();
+            if (!url) {
+                alert('Vui lòng nhập URL!');
+                return;
             }
-        } catch (error) {
-            log.error('Lỗi: ' + error.message);
-        } finally {
-            setAnalyzeLoading(false);
+
+            setAnalyzeLoading(true);
+            log.info('Đang kết nối Playwright để phân tích form...');
+
+            try {
+                const response = await postJson(API.ANALYZE_URL, { formUrl: url });
+                const questions = await response.json();
+                globalQuestions = Array.isArray(questions) ? questions : [];
+
+                if (globalQuestions.length === 0) {
+                    log.error('Không tìm thấy câu hỏi nào. Kiểm tra lại Link hoặc Xpath.');
+                } else {
+                    log.info(`Đã quét xong! Tìm thấy ${globalQuestions.length} câu hỏi.`);
+                    renderConfigUI(globalQuestions);
+                    saveSession();
+                }
+            } catch (error) {
+                log.error('Lỗi: ' + error.message);
+            } finally {
+                setAnalyzeLoading(false);
+            }
         }
-    }
 
-    function collectWeightsFromUI() {
-        const inputs = document.querySelectorAll('.weight-input');
-        inputs.forEach(input => {
-            const qIdx = Number(input.dataset.qIndex);
-            const optIdx = Number(input.dataset.optIndex);
-            const val = parseFloat(input.value);
+        function collectWeightsFromUI() {
+            const inputs = document.querySelectorAll('.weight-input');
+            inputs.forEach(input => {
+                const qIdx = Number(input.dataset.qIndex);
+                const optIdx = Number(input.dataset.optIndex);
+                const val = parseFloat(input.value);
 
-            if (
-                !Number.isNaN(qIdx) &&
-                !Number.isNaN(optIdx) &&
-                globalQuestions[qIdx] &&
-                globalQuestions[qIdx].options &&
-                globalQuestions[qIdx].options[optIdx]
-            ) {
+                if (
+                    !Number.isNaN(qIdx) &&
+                    !Number.isNaN(optIdx) &&
+                    globalQuestions[qIdx] &&
+                    globalQuestions[qIdx].options &&
+                    globalQuestions[qIdx].options[optIdx]
+                ) {
+                    globalQuestions[qIdx].options[optIdx].weight = val;
+                }
+            });
+            saveSession();
+        }
+
+        function handleWeightInputChanged(inputEl) {
+            const qIdx = Number(inputEl.dataset.qIndex);
+            const optIdx = Number(inputEl.dataset.optIndex);
+            const val = parseFloat(inputEl.value);
+
+            if (!Number.isNaN(qIdx) && !Number.isNaN(optIdx) && globalQuestions[qIdx] && globalQuestions[qIdx].options[optIdx]) {
                 globalQuestions[qIdx].options[optIdx].weight = val;
+                saveSession();
             }
-        });
-    }
-
-    function setZeroAndDistribute(qIdx, targetOptIdx) {
-        const inputs = Array.from(document.querySelectorAll(`.weight-input[data-q-index="${qIdx}"]`));
-        
-        const targetInput = inputs.find(i => Number(i.dataset.optIndex) === targetOptIdx);
-        if (targetInput) {
-            targetInput.value = 0;
         }
 
-        // Tìm các input còn lại đang > 0
-        let eligibleInputs = inputs.filter(i => Number(i.dataset.optIndex) !== targetOptIdx && Number(i.value) > 0);
-        
-        // Nếu tất cả các mục khác đều đã bằng 0, thì chia đều lại cho tất cả các mục khác đó
-        if (eligibleInputs.length === 0) {
-            eligibleInputs = inputs.filter(i => Number(i.dataset.optIndex) !== targetOptIdx);
-        }
+        function setZeroAndDistribute(qIdx, targetOptIdx) {
+            const inputs = Array.from(document.querySelectorAll(`.weight-input[data-q-index="${qIdx}"]`));
 
-        if (eligibleInputs.length === 0) return; // Nếu form chỉ có đúng 1 đáp án
-
-        const evenWeight = Math.floor(100 / eligibleInputs.length);
-        let remainder = 100 - (evenWeight * eligibleInputs.length);
-
-        eligibleInputs.forEach(input => {
-            let weight = evenWeight;
-            if (remainder > 0) {
-                weight += 1;
-                remainder--;
+            const targetInput = inputs.find(i => Number(i.dataset.optIndex) === targetOptIdx);
+            if (targetInput) {
+                targetInput.value = 0;
             }
-            input.value = weight;
-        });
-    }
 
-    async function executeBot() {
-        const quantity = parseInt(el.quantityInput.value, 10);
-        const url = el.urlInput.value.trim();
+            // Tìm các input còn lại đang > 0
+            let eligibleInputs = inputs.filter(i => Number(i.dataset.optIndex) !== targetOptIdx && Number(i.value) > 0);
 
-        if (!url) {
-            alert('Vui lòng nhập URL!');
-            return;
+            // Nếu tất cả các mục khác đều đã bằng 0, thì chia đều lại cho tất cả các mục khác đó
+            if (eligibleInputs.length === 0) {
+                eligibleInputs = inputs.filter(i => Number(i.dataset.optIndex) !== targetOptIdx);
+            }
+
+            if (eligibleInputs.length === 0) return; // Nếu form chỉ có đúng 1 đáp án
+
+            // Chia đều với 2 chữ số thập phân
+            const evenWeight = 100 / eligibleInputs.length;
+            const roundedWeight = Number(evenWeight.toFixed(2));
+
+            let totalAssigned = 0;
+
+            eligibleInputs.forEach((input, index) => {
+                let weight = roundedWeight;
+
+                // Ở mục cuối cùng, ta cộng thêm phần dư (nếu có do làm tròn) để tổng đúng 100%
+                if (index === eligibleInputs.length - 1) {
+                    weight = 100 - totalAssigned;
+                }
+
+                // Tránh chia quá hoàn hảo để trông "con người" hơn một chút (tùy chọn)
+                // Nhưng trước hết cứ chia theo định dạng xx.xx
+                input.value = Number(weight.toFixed(2));
+                totalAssigned += weight;
+            });
+
+            collectWeightsFromUI(); // Lưu lại sau khi phân bổ
         }
-        if (!Number.isFinite(quantity) || quantity < 1) {
-            alert('Số lần chạy không hợp lệ!');
-            return;
+
+        function randomizeFuzz(qIdx) {
+            const inputs = Array.from(document.querySelectorAll(`.weight-input[data-q-index="${qIdx}"]`));
+            // Chỉ làm lệch (fuzz) các mục đang có giá trị > 0
+            let eligibleInputs = inputs.filter(i => Number(i.value) > 0);
+
+            if (eligibleInputs.length <= 1) {
+                alert('Cần ít nhất 2 mục > 0% để có thể làm ngẫu nhiên!');
+                return;
+            }
+
+            let currentValues = eligibleInputs.map(i => Number(i.value));
+
+            // Cộng/trừ ngẫu nhiên trong khoảng -5% đến +5% cho mỗi giá trị
+            let newValues = currentValues.map(v => {
+                let change = (Math.random() * 10) - 5;
+                let nv = v + change;
+                if (nv < 1) nv = 1; // Không để giá trị tụt xuống 0 hoặc âm
+                return nv;
+            });
+
+            // Chuẩn hoá lại để tổng = 100
+            let newSum = newValues.reduce((a, b) => a + b, 0);
+            newValues = newValues.map(v => (v / newSum) * 100);
+
+            let totalAssigned = 0;
+            eligibleInputs.forEach((input, index) => {
+                let weight = Number(newValues[index].toFixed(2));
+                if (index === eligibleInputs.length - 1) {
+                    weight = 100 - totalAssigned;
+                }
+                input.value = Number(weight.toFixed(2));
+                totalAssigned += weight;
+            });
+
+            collectWeightsFromUI(); // Lưu lại sau khi random
         }
 
-        collectWeightsFromUI();
-        setExecuteLoading(true);
-        log.info(`Bắt đầu chạy tool ${quantity} lần... Hãy quan sát trình duyệt bật lên.`);
+        async function executeBot() {
+            const quantity = parseInt(el.quantityInput.value, 10);
+            const url = el.urlInput.value.trim();
+            const fastMode = document.getElementById('fastModeCheckbox').checked;
+            const useCakeShopData = document.getElementById('useCakeShopDataCheckbox').checked;
 
-        const payload = {
-            formUrl: url,
-            numSubmissions: quantity,
-            questions: globalQuestions
-        };
+            if (!url) {
+                alert('Vui lòng nhập URL!');
+                return;
+            }
+            if (!Number.isFinite(quantity) || quantity < 1) {
+                alert('Số lần chạy không hợp lệ!');
+                return;
+            }
 
-        try {
-            const response = await postJson(API.EXECUTE_URL, payload);
-            const msg = await response.text();
-            log.info('✅ ' + msg);
-            alert('Hoàn thành quá trình chạy!');
-        } catch (error) {
-            log.error('❌ ' + error.message);
-        } finally {
-            setExecuteLoading(false);
+            collectWeightsFromUI();
+            setExecuteLoading(true);
+            if (fastMode) {
+                log.info(`⚡ Đang chạy ${quantity} lần ở CHẾ ĐỘ SIÊU TỐC (Đa luồng, ẩn trình duyệt). Tốc độ x10-x20 lần!`);
+            } else {
+                log.info(`Bắt đầu chạy tool ${quantity} lần... Hãy quan sát trình duyệt bật lên.`);
+            }
+
+            const payload = {
+                formUrl: url,
+                numSubmissions: quantity,
+                questions: globalQuestions,
+                fastMode: fastMode,
+                useCakeShopData: useCakeShopData
+            };
+
+            try {
+                const response = await postJson(API.EXECUTE_URL, payload);
+                const msg = await response.text();
+                log.info('✅ ' + msg);
+                alert('Hoàn thành quá trình chạy!');
+            } catch (error) {
+                log.error('❌ ' + error.message);
+            } finally {
+                setExecuteLoading(false);
+            }
         }
-    }
 
-    function resetStep() {
-        unlockStep1();
-        hideStep2();
-        el.questionsList.innerHTML = `
+        async function cancelBot() {
+            if (!confirm('Bạn có chắc chắn muốn huỷ quá trình chạy?')) return;
+
+            log.info('⏳ Đang gửi lệnh huỷ...');
+            try {
+                const response = await fetch(API.CANCEL_URL, { method: 'POST' });
+                const msg = await response.text();
+                log.info('⚠️ ' + msg);
+                // setExecuteLoading(false) will be handled by the finally block of executeBot when the backend throws exception or returns
+            } catch (error) {
+                log.error('Lỗi khi gửi lệnh huỷ: ' + error.message);
+            }
+        }
+
+        function normalizeString(str) {
+            if (!str) return '';
+            return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+        }
+
+        function handleCSVUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            log.info('Đang đọc file CSV...');
+
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                complete: function (results) {
+                    const data = results.data;
+                    const meta = results.meta;
+
+                    if (data.length === 0) {
+                        alert("File CSV trống hoặc không đúng định dạng!");
+                        event.target.value = '';
+                        return;
+                    }
+
+                    log.info(`Đã đọc ${data.length} dòng phản hồi từ CSV.`);
+
+                    const fields = meta.fields;
+                    let matchCount = 0;
+
+                    globalQuestions.forEach(q => {
+                        if (q.type !== 'RADIO' && q.type !== 'CHECKBOX') return;
+
+                        const normQTitle = normalizeString(q.title);
+
+                        let matchedField = fields.find(f => normalizeString(f) === normQTitle);
+                        if (!matchedField) {
+                            matchedField = fields.find(f => normalizeString(f).includes(normQTitle) || normQTitle.includes(normalizeString(f)));
+                        }
+
+                        if (matchedField) {
+                            matchCount++;
+                            const counts = {};
+                            let respondents = 0;
+                            let matchedTotal = 0;
+
+                            data.forEach(row => {
+                                let cellValue = row[matchedField];
+                                if (cellValue && cellValue.trim() !== '') {
+                                    respondents++;
+                                    let answers = [cellValue.trim()];
+                                    if (q.type === 'CHECKBOX') {
+                                        answers = cellValue.split(',').map(s => s.trim());
+                                    }
+                                    answers.forEach(ans => {
+                                        counts[ans] = (counts[ans] || 0) + 1;
+                                    });
+                                }
+                            });
+
+                            if (respondents > 0) {
+                                q.options.forEach(opt => {
+                                    if (opt.value === '__other_option__') return;
+
+                                    const normOptText = normalizeString(opt.text);
+                                    let optVotes = 0;
+                                    for (const [ansText, ansCount] of Object.entries(counts)) {
+                                        if (normalizeString(ansText) === normOptText) {
+                                            optVotes += ansCount;
+                                        }
+                                    }
+                                    let percentage = (optVotes / respondents) * 100;
+                                    opt.weight = Number(percentage.toFixed(2));
+                                    matchedTotal += optVotes;
+                                });
+
+                                const otherOpt = q.options.find(o => o.value === '__other_option__');
+                                if (otherOpt) {
+                                    let totalAnswersGiven = Object.values(counts).reduce((a, b) => a + b, 0);
+                                    let remaining = totalAnswersGiven - matchedTotal;
+                                    if (remaining > 0) {
+                                        let percentage = (remaining / respondents) * 100;
+                                        otherOpt.weight = Number(percentage.toFixed(2));
+                                    } else {
+                                        otherOpt.weight = 0;
+                                    }
+                                }
+                            }
+                        }
+                    });
+
+                    if (matchCount > 0) {
+                        alert(`Đã đồng bộ thành công ${matchCount} câu hỏi từ CSV!`);
+                        renderConfigUI(globalQuestions);
+                        saveSession();
+                        log.info(`Đồng bộ thành công ${matchCount} câu hỏi.`);
+                    } else {
+                        alert("Không tìm thấy câu hỏi nào trùng khớp tiêu đề giữa CSV và Form hiện tại.");
+                        log.error("Đồng bộ thất bại: Không khớp tiêu đề.");
+                    }
+
+                    event.target.value = '';
+                },
+                error: function (error) {
+                    alert("Lỗi khi đọc file CSV: " + error.message);
+                    event.target.value = '';
+                }
+            });
+        }
+
+        function resetStep() {
+            unlockStep1();
+            hideStep2();
+            el.questionsList.innerHTML = `
             <p class="text-gray-400 text-center italic">Chưa có dữ liệu...</p>
         `;
-        globalQuestions = [];
-        log.info('Đã reset.');
-    }
-</script>
+            globalQuestions = [];
+            log.info('Đã reset.');
+        }
+
+        // ==========================
+        // SESSION MANAGEMENT
+        // ==========================
+        const SESSION_KEY = 'formAutoSession';
+
+        function saveSession() {
+            const sessionData = {
+                url: el.urlInput.value.trim(),
+                questions: globalQuestions
+            };
+            localStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
+        }
+
+        function loadSession() {
+            const data = localStorage.getItem(SESSION_KEY);
+            if (data) {
+                try {
+                    const sessionData = JSON.parse(data);
+                    if (sessionData.url && sessionData.questions && sessionData.questions.length > 0) {
+                        el.urlInput.value = sessionData.url;
+                        globalQuestions = sessionData.questions;
+                        log.info(`🔄 Đã nạp lại trạng thái cũ từ trình duyệt (${globalQuestions.length} câu hỏi).`);
+                        renderConfigUI(globalQuestions);
+                    }
+                } catch (e) {
+                    console.error('Lỗi khi nạp session', e);
+                }
+            }
+        }
+
+        function clearSession() {
+            if (!confirm('Bạn có chắc muốn xoá toàn bộ dữ liệu cấu hình đã nạp?')) return;
+            localStorage.removeItem(SESSION_KEY);
+            resetStep();
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadSession();
+        });
+    </script>
 </body>
+
 </html>

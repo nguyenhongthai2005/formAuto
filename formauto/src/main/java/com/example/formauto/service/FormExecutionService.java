@@ -14,6 +14,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 import java.util.regex.Pattern;
+import java.nio.file.Paths;
 
 @Service
 public class FormExecutionService {
@@ -23,8 +24,10 @@ public class FormExecutionService {
     private static final String QUESTION_BLOCK = "div[role='listitem']";
     private final Random random = new Random();
 
+    private volatile boolean isCancelled = false;
+
     // --- BIẾN LƯU TRỮ TÊN CỦA NGƯỜI ĐANG ĐIỀN (Để đồng bộ với Email) ---
-    private String currentSubmissionName = null;
+    private final ThreadLocal<String> currentSubmissionName = new ThreadLocal<>();
 
     // --- DATA VIỆT NAM ---
     private static final String[] HO_VN = {"Nguyễn", "Trần", "Lê", "Phạm", "Hoàng", "Huỳnh", "Phan", "Vũ", "Võ", "Đặng", "Bùi", "Đỗ", "Hồ", "Ngô", "Dương", "Lý"};
@@ -57,77 +60,141 @@ public class FormExecutionService {
             "Mọi thứ đều hoàn hảo, cảm ơn thương hiệu rất nhiều."
     };
 
-    public void executeAutoFill(String url, List<QuestionDTO> configQuestions, int quantity) {
+    // --- DATA CAKE SHOP ---
+    private static final String[] CAKE_ANS_GOP_Y = {
+            "không", "ko có", "không có", "dạ không", "ok", "tốt rồi",
+            "mở thêm chi nhánh", "nhiều khuyến mãi hơn", "giao hàng nhanh xíu",
+            "thêm nhiều vị bánh", "nhân viên cần thân thiện hơn", "tạm ổn", ".",
+            "chưa nghĩ ra", "không nha", "ổn rồi k cần sửa gì"
+    };
+
+    private static final String[] CAKE_ANS_LY_DO = {
+            "Chất lượng bánh", "Ngon", "Bánh ngon", "Chất lượng", "chất lượng sản phẩm",
+            "Gần nhà", "Giá cả, chất lượng", "Sản phẩm đa dạng, nhân viên thân thiện , nhiệt tình",
+            "mẫu mã sản phẩm", "giá cả hợp lý, chất lượng bánh", "Mẫu đẹp", "không",
+            "Chất lượng sản phẩm, các ưu đãi tại cửa hàng", "Là chất lượng bánh", "ngon",
+            "Giá, mẫu mã", "giá", "Bánh giống hình", "Rẻ, nhanh", "Like", "ngon, đẹp",
+            "Vị trị thuận lợi, gần nhà, bánh ngon", "Ngon, bổ, rẻ", "ok", 
+            "Hợp khẩu vị, giá cả hợp lý, mẫu bánh bắt mắt", "Hết", "không có", "tạm ổn",
+            "Dạ không ạ", "gần trường tôi học", "chất kuowngj", "NGon_Chất lượng-Giá ổn",
+            "hương vị", "giá cả và chất lượng", "vị trí", "Cute", "ngon đẹp rẻ", "Ngonnnnnn",
+            "Tui chưa có mua nên k có biết á mấy bạn", "Đẹp", "Bánh ngon``",
+            "gần trường FPT, mẫu mã và vị bánh ngon", "giá thành, chất lượng", "Có thể là mẫu mã",
+            "Không", "Chưa biết", "Nhân viên", "Nhân viên nhiệt tình, hỗ trợ rất nhanh", "ko có"
+    };
+
+    private static final String[] CAKE_ANS_CHUNG = {
+            "ok", "rất tốt", "bánh ngon", "tuyệt vời", "10 điểm", "tạm được",
+            "giá hơi cao nhưng ngon", "đẹp", "ủng hộ quán dài", "Ngon lắm", 
+            "chất lượng", "bt", "bình thường", "phục vụ tốt", "rất ok"
+    };
+
+    public void cancelExecution() {
+        this.isCancelled = true;
+        log.warn("⚠️ Đã nhận lệnh huỷ quá trình chạy!");
+    }
+
+    public void executeAutoFill(String url, List<QuestionDTO> configQuestions, int quantity, boolean fastMode, boolean useCakeShopData) {
         if (configQuestions == null || configQuestions.isEmpty()) {
             log.error("❌ Danh sách câu hỏi bị TRỐNG, hủy auto-fill.");
             return;
         }
 
-        log.info("▶ Bắt đầu auto-fill {} lần cho form {}", quantity, url);
+        isCancelled = false;
+        log.info("▶ Bắt đầu auto-fill {} lần cho form {} (FastMode: {})", quantity, url, fastMode);
 
-        try (Playwright playwright = Playwright.create()) {
-            Browser browser = playwright.chromium()
-                    .launch(new BrowserType.LaunchOptions().setHeadless(false).setSlowMo(50));
+        if (fastMode) {
+            int threads = 5; // Số luồng chạy song song
+            java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(threads);
+            List<java.util.concurrent.CompletableFuture<Void>> futures = new java.util.ArrayList<>();
 
             for (int i = 1; i <= quantity; i++) {
-
-                log.info("🔁 Lần chạy {}/{}", i, quantity);
-
-                // RESET TÊN NGƯỜI DÙNG MỚI CHO LẦN NÀY
-                currentSubmissionName = null;
-
-                BrowserContext context = browser.newContext();
-                Page page = context.newPage();
-
-                try {
-                    page.navigate(url);
-                    page.waitForLoadState(LoadState.LOAD);
-                    try { page.waitForSelector(QUESTION_BLOCK, new Page.WaitForSelectorOptions().setTimeout(5000)); } catch (Exception ignored) {}
-
-                    if (page.title().contains("Đăng nhập")) {
-                        log.warn("⛔ Form yêu cầu đăng nhập – bỏ qua lần {}", i);
-                        continue;
-                    }
-
-                    boolean success = processPageLoop(page, configQuestions);
-
-                    if (success) {
-                        log.info("✅ Lần {}: gửi thành công", i);
-                    } else {
-                        if (isSuccessPage(page)) {
-                            log.info("✅ Lần {}: gửi thành công (check lại)", i);
-                        } else {
-                            log.warn("❌ Lần {}: gửi thất bại", i);
-                        }
-                    }
-
-                    Thread.sleep(1000);
-
-                } catch (Exception e) {
-                    log.error("❌ Lỗi ở lần {}: {}", i, e.getMessage(), e);
-                } finally {
-                    context.close();
-                }
+                final int currentIteration = i;
+                java.util.concurrent.CompletableFuture<Void> future = java.util.concurrent.CompletableFuture.runAsync(() -> {
+                    if (isCancelled) return;
+                    runSingleExecution(url, configQuestions, currentIteration, quantity, true, useCakeShopData);
+                }, executor);
+                futures.add(future);
             }
 
-            browser.close();
-            log.info("🏁 Đã hoàn thành auto-fill {} lần.", quantity);
+            java.util.concurrent.CompletableFuture.allOf(futures.toArray(new java.util.concurrent.CompletableFuture[0])).join();
+            executor.shutdown();
+        } else {
+            // Chạy tuần tự
+            for (int i = 1; i <= quantity; i++) {
+                if (isCancelled) {
+                    log.warn("⛔ Quá trình chạy bị HUỶ BỎ bởi người dùng!");
+                    break;
+                }
+                runSingleExecution(url, configQuestions, i, quantity, false, useCakeShopData);
+            }
+        }
 
+        log.info("🏁 Đã hoàn thành (hoặc bị huỷ) auto-fill {} lần.", quantity);
+    }
+
+    private void runSingleExecution(String url, List<QuestionDTO> configQuestions, int i, int quantity, boolean fastMode, boolean useCakeShopData) {
+        currentSubmissionName.remove();
+        log.info("🔁 Lần chạy {}/{}", i, quantity);
+
+        try (Playwright playwright = Playwright.create()) {
+            BrowserType.LaunchOptions options = new BrowserType.LaunchOptions().setHeadless(fastMode);
+            if (!fastMode) {
+                options.setSlowMo(50);
+            }
+            
+            Browser browser = playwright.chromium().launch(options);
+            BrowserContext context = browser.newContext();
+            Page page = context.newPage();
+
+            try {
+                page.navigate(url);
+                page.waitForLoadState(LoadState.LOAD);
+                try { page.waitForSelector(QUESTION_BLOCK, new Page.WaitForSelectorOptions().setTimeout(5000)); } catch (Exception ignored) {}
+
+                if (page.title().contains("Đăng nhập")) {
+                    log.warn("⛔ Form yêu cầu đăng nhập – bỏ qua lần {}", i);
+                    return;
+                }
+
+                boolean success = processPageLoop(page, configQuestions, fastMode, useCakeShopData);
+
+                if (success) {
+                    log.info("✅ Lần {}: gửi thành công", i);
+                } else {
+                    if (isSuccessPage(page)) {
+                        log.info("✅ Lần {}: gửi thành công (check lại)", i);
+                    } else {
+                        log.warn("❌ Lần {}: gửi thất bại", i);
+                    }
+                }
+
+                if (!fastMode) Thread.sleep(1000);
+
+            } catch (Exception e) {
+                log.error("❌ Lỗi ở lần {}: {}", i, e.getMessage(), e);
+            } finally {
+                context.close();
+                browser.close();
+            }
         } catch (Exception e) {
-            log.error("❌ Lỗi khởi tạo Playwright: {}", e.getMessage(), e);
+            log.error("❌ Lỗi khởi tạo Playwright ở luồng {}: {}", i, e.getMessage(), e);
         }
     }
 
-    private boolean processPageLoop(Page page, List<QuestionDTO> configQuestions) {
+    private boolean processPageLoop(Page page, List<QuestionDTO> configQuestions, boolean fastMode, boolean useCakeShopData) {
         int currentPage = 1;
 
         while (currentPage <= 10) {
+            if (isCancelled) return false;
 
-            page.keyboard().press("End");
-            try { Thread.sleep(500); } catch (InterruptedException ignored) {}
+            if (!fastMode) {
+                page.keyboard().press("End");
+                try { Thread.sleep(500); } catch (InterruptedException ignored) {}
+            }
 
             // 1. Điền dữ liệu cho trang hiện tại
-            fillCurrentPage(page, configQuestions, currentPage);
+            fillCurrentPage(page, configQuestions, currentPage, useCakeShopData);
 
             // 2. Tìm nút điều hướng
             Locator btn = findNavigationButton(page);
@@ -146,9 +213,31 @@ public class FormExecutionService {
                 btn.evaluate("e => e.click()");
             }
 
+            // --- SMART WAIT: Đợi thông minh (Tối ưu nhất) ---
             try {
-                page.waitForLoadState(LoadState.LOAD);
-                Thread.sleep(2000);
+                long start = System.currentTimeMillis();
+                boolean pageChanged = false;
+                
+                // Liên tục kiểm tra xem Tiêu đề câu hỏi đang hiển thị đã thay đổi chưa
+                while (System.currentTimeMillis() - start < 15000) { // Chờ tối đa 15 giây
+                    String currentTitle = getFirstQuestionTitle(page);
+                    
+                    // Nếu không lấy được title (tới trang submit/kết thúc) HOẶC title đã khác -> Đã chuyển trang xong!
+                    if (currentTitle == null || !currentTitle.equals(firstQTitleBefore)) {
+                        pageChanged = true;
+                        break;
+                    }
+                    Thread.sleep(100); 
+                }
+
+                if (pageChanged) {
+                    if (!fastMode) {
+                        Thread.sleep(1500); // Chế độ thường: Đợi 1.5s để người dùng kịp nhìn thấy trang mới
+                    } else {
+                        Thread.sleep(1000); // Chế độ nhanh: Đợi 1 giây để an toàn tuyệt đối với React Hydration (Vẫn nhanh hơn 1.5s của Normal Mode)
+                    }
+                }
+                
                 page.waitForSelector(QUESTION_BLOCK, new Page.WaitForSelectorOptions().setTimeout(3000));
             } catch (Exception ignored) {}
 
@@ -157,7 +246,11 @@ public class FormExecutionService {
 
             String firstQTitleAfter = getFirstQuestionTitle(page);
             if (firstQTitleBefore != null && firstQTitleBefore.equals(firstQTitleAfter)) {
-                log.error("❌ Không thể chuyển trang từ trang {}. Có thể do lỗi validation thiếu trường bắt buộc.", currentPage);
+                String screenshotName = "error_page_" + currentPage + "_" + Thread.currentThread().getName() + ".png";
+                try {
+                    page.screenshot(new Page.ScreenshotOptions().setPath(Paths.get(screenshotName)));
+                } catch (Exception ignored) {}
+                log.error("❌ Không thể chuyển trang từ trang {}. Có thể do lỗi validation thiếu trường bắt buộc. Đã lưu ảnh: {}", currentPage, screenshotName);
                 return false;
             }
 
@@ -170,8 +263,15 @@ public class FormExecutionService {
     private String getFirstQuestionTitle(Page page) {
         try {
             Locator blocks = page.locator(QUESTION_BLOCK);
-            if (blocks.count() > 0) {
-                return blocks.nth(0).locator("div[role='heading']").first().textContent().trim();
+            int count = blocks.count();
+            for (int i = 0; i < count; i++) {
+                Locator block = blocks.nth(i);
+                if (block.isVisible()) {
+                    Locator heading = block.locator("div[role='heading']").first();
+                    if (heading.isVisible()) {
+                        return heading.textContent().trim();
+                    }
+                }
             }
         } catch (Exception e) {
             return null;
@@ -179,7 +279,7 @@ public class FormExecutionService {
         return null;
     }
 
-    private void fillCurrentPage(Page page, List<QuestionDTO> configQuestions, int currentPage) {
+    private void fillCurrentPage(Page page, List<QuestionDTO> configQuestions, int currentPage, boolean useCakeShopData) {
         Locator pageBlocks = page.locator(QUESTION_BLOCK);
 
         for (QuestionDTO qConfig : configQuestions) {
@@ -194,7 +294,12 @@ public class FormExecutionService {
             }
 
             Locator block = pageBlocks.nth(localIndex);
-            if (block.count() == 0 || !block.isVisible()) continue;
+            if (block.count() == 0) continue;
+            try {
+                block.waitFor(new Locator.WaitForOptions().setState(com.microsoft.playwright.options.WaitForSelectorState.VISIBLE).setTimeout(5000));
+            } catch (Exception e) {
+                continue;
+            }
 
             String type = qConfig.getType();
 
@@ -207,15 +312,17 @@ public class FormExecutionService {
                     int optIndex = selected.getDomIndex();
                     if (optIndex >= 0) {
                         Locator option = block.locator("div[role='radio']").nth(optIndex);
-                        if (option.isVisible()) {
+                        try {
+                            option.waitFor(new Locator.WaitForOptions().setState(com.microsoft.playwright.options.WaitForSelectorState.VISIBLE).setTimeout(5000));
                             option.click(new Locator.ClickOptions().setForce(true));
                             if ("__other_option__".equals(selected.getValue())) {
                                 Locator otherInput = block.locator("input[type='text']:not([type='hidden'])");
-                                if (otherInput.count() > 0 && otherInput.first().isVisible()) {
+                                try {
+                                    otherInput.first().waitFor(new Locator.WaitForOptions().setState(com.microsoft.playwright.options.WaitForSelectorState.VISIBLE).setTimeout(5000));
                                     otherInput.first().fill("Lý do khác " + random.nextInt(100));
-                                }
+                                } catch (Exception ignored) {}
                             }
-                        }
+                        } catch (Exception ignored) {}
                     }
                 }
             }
@@ -223,17 +330,20 @@ public class FormExecutionService {
             else if ("CHECKBOX".equals(type)) {
                 List<OptionDTO> options = qConfig.getOptions();
                 Locator checkLocators = block.locator("div[role='checkbox']");
+                try {
+                    checkLocators.first().waitFor(new Locator.WaitForOptions().setState(com.microsoft.playwright.options.WaitForSelectorState.VISIBLE).setTimeout(5000));
+                } catch (Exception ignored) {}
                 
                 boolean clickedAny = false;
                 for (int i = 0; i < options.size(); i++) {
                     OptionDTO opt = options.get(i);
-                    int chance = random.nextInt(100);
+                    double chance = java.util.concurrent.ThreadLocalRandom.current().nextDouble() * 100;
                     
                     int optIndex = opt.getDomIndex();
-                    if (optIndex >= checkLocators.count()) break;
                     Locator option = checkLocators.nth(optIndex);
 
-                    if (option.isVisible()) {
+                    try {
+                        option.waitFor(new Locator.WaitForOptions().setState(com.microsoft.playwright.options.WaitForSelectorState.VISIBLE).setTimeout(5000));
                         boolean checked = "true".equals(option.getAttribute("aria-checked"));
                         if (chance < opt.getWeight()) {
                             clickedAny = true; // Sẽ được check
@@ -241,9 +351,10 @@ public class FormExecutionService {
                                 option.click(new Locator.ClickOptions().setForce(true));
                                 if ("__other_option__".equals(opt.getValue())) {
                                     Locator otherInput = block.locator("input[type='text']:not([type='hidden'])");
-                                    if (otherInput.count() > 0 && otherInput.first().isVisible()) {
+                                    try {
+                                        otherInput.first().waitFor(new Locator.WaitForOptions().setState(com.microsoft.playwright.options.WaitForSelectorState.VISIBLE).setTimeout(5000));
                                         otherInput.first().fill("Lý do khác " + random.nextInt(100));
-                                    }
+                                    } catch (Exception ignored) {}
                                 }
                             }
                         } else {
@@ -251,55 +362,62 @@ public class FormExecutionService {
                                 option.click(new Locator.ClickOptions().setForce(true)); // Bỏ check
                             }
                         }
-                    }
+                    } catch (Exception ignored) {}
                 }
                 
                 if (!clickedAny && options.size() > 0) {
                     java.util.List<OptionDTO> validOptions = options.stream().filter(o -> o.getWeight() > 0).collect(java.util.stream.Collectors.toList());
+                    if (validOptions.isEmpty()) {
+                        // Nếu lỡ set 0% cho toàn bộ Checkbox, bắt buộc phải chọn bừa 1 cái thay vì bỏ trống (tránh lỗi Validation bắt buộc)
+                        validOptions = options;
+                    }
                     
                     if (!validOptions.isEmpty()) {
-                        OptionDTO fallbackOpt = validOptions.get(random.nextInt(validOptions.size()));
+                        OptionDTO fallbackOpt = validOptions.get(java.util.concurrent.ThreadLocalRandom.current().nextInt(validOptions.size()));
                         int optIndex = fallbackOpt.getDomIndex();
-                        if (optIndex < checkLocators.count()) {
-                            Locator option = checkLocators.nth(optIndex);
-                            if (option.isVisible()) {
+                        Locator option = checkLocators.nth(optIndex);
+                        try {
+                            option.waitFor(new Locator.WaitForOptions().setState(com.microsoft.playwright.options.WaitForSelectorState.VISIBLE).setTimeout(5000));
                                 boolean checked = "true".equals(option.getAttribute("aria-checked"));
                                 if (!checked) {
                                     option.click(new Locator.ClickOptions().setForce(true));
                                     if ("__other_option__".equals(fallbackOpt.getValue())) {
                                         Locator otherInput = block.locator("input[type='text']:not([type='hidden'])");
-                                        if (otherInput.count() > 0 && otherInput.first().isVisible()) {
+                                        try {
+                                            otherInput.first().waitFor(new Locator.WaitForOptions().setState(com.microsoft.playwright.options.WaitForSelectorState.VISIBLE).setTimeout(5000));
                                             otherInput.first().fill("Lý do khác " + random.nextInt(100));
-                                        }
+                                        } catch (Exception ignored) {}
                                     }
                                 }
-                            }
-                        }
+                            } catch (Exception ignored) {}
                     }
                 }
             }
             // TEXT
             else if ("TEXT".equals(type)) {
                 Locator input = block.locator("input[type='text']:not([style*='display: none']), input:not([type]), textarea").first();
-                if (input.isVisible() && input.inputValue().isEmpty()) {
+                try {
+                    input.waitFor(new Locator.WaitForOptions().setState(com.microsoft.playwright.options.WaitForSelectorState.VISIBLE).setTimeout(5000));
+                    if (input.inputValue().isEmpty()) {
 
                     String title = qConfig.getTitle().toLowerCase();
                     String valueToFill;
 
                     if (title.contains("tên") || title.contains("name")) {
-                        if (currentSubmissionName == null) currentSubmissionName = generateRandomName();
-                        valueToFill = currentSubmissionName;
+                        if (currentSubmissionName.get() == null) currentSubmissionName.set(generateRandomName());
+                        valueToFill = currentSubmissionName.get();
                     }
                     else if (title.contains("mail")) {
-                        if (currentSubmissionName == null) currentSubmissionName = generateRandomName();
-                        valueToFill = generateEmailFromName(currentSubmissionName);
+                        if (currentSubmissionName.get() == null) currentSubmissionName.set(generateRandomName());
+                        valueToFill = generateEmailFromName(currentSubmissionName.get());
                     }
                     else {
-                        valueToFill = generateOtherVietnameseData(title);
+                        valueToFill = generateOtherVietnameseData(title, useCakeShopData);
                     }
 
                     input.fill(valueToFill);
-                }
+                    }
+                } catch(Exception ignored) {}
             }
             // DATE
             else if ("DATE".equals(type)) {
@@ -413,7 +531,7 @@ public class FormExecutionService {
         return ten + ho + random.nextInt(100, 9999) + "@gmail.com";
     }
 
-    private String generateOtherVietnameseData(String title) {
+    private String generateOtherVietnameseData(String title, boolean useCakeShopData) {
         String t = title.toLowerCase();
 
         if (t.contains("sđt") || t.contains("số điện thoại") || t.contains("phone")) {
@@ -429,14 +547,14 @@ public class FormExecutionService {
             return String.valueOf(random.nextInt(18, 40));
 
         if (t.contains("góp ý") || t.contains("cải thiện") || t.contains("nhận xét") || t.contains("feedback") || t.contains("ý kiến") || t.contains("improve")) {
-            return "Không";
+            return useCakeShopData ? CAKE_ANS_GOP_Y[random.nextInt(CAKE_ANS_GOP_Y.length)] : ANS_GOP_Y[random.nextInt(ANS_GOP_Y.length)];
         }
 
         if (t.contains("yếu tố") || t.contains("lý do") || t.contains("tiếp tục") || t.contains("tương lai") || t.contains("lựa chọn") || t.contains("why") || t.contains("reason")) {
-            return ANS_LY_DO[random.nextInt(ANS_LY_DO.length)];
+            return useCakeShopData ? CAKE_ANS_LY_DO[random.nextInt(CAKE_ANS_LY_DO.length)] : ANS_LY_DO[random.nextInt(ANS_LY_DO.length)];
         }
 
-        return ANS_CHUNG[random.nextInt(ANS_CHUNG.length)];
+        return useCakeShopData ? CAKE_ANS_CHUNG[random.nextInt(CAKE_ANS_CHUNG.length)] : ANS_CHUNG[random.nextInt(ANS_CHUNG.length)];
     }
 
     private String generateRandomName() {

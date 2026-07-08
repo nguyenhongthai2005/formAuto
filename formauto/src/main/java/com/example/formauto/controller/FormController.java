@@ -59,14 +59,16 @@ public class FormController {
             return ResponseEntity.badRequest().body("Thông tin không hợp lệ.");
         }
 
-        System.out.println("-> Bắt đầu chạy tool. Số lần: " + request.getNumSubmissions());
+        System.out.println("-> Bắt đầu chạy tool. Số lần: " + request.getNumSubmissions() + " (FastMode: " + request.isFastMode() + ")");
 
         try {
             // Gọi Service chạy vòng lặp điền form
             formExecutionService.executeAutoFill(
                     request.getFormUrl(),
                     request.getQuestions(),
-                    request.getNumSubmissions()
+                    request.getNumSubmissions(),
+                    request.isFastMode(),
+                    request.isUseCakeShopData()
             );
 
             return ResponseEntity.ok("Đã chạy xong " + request.getNumSubmissions() + " lần.");
@@ -76,5 +78,11 @@ public class FormController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Lỗi trong quá trình chạy: " + e.getMessage());
         }
+    }
+
+    @PostMapping("/cancel")
+    public ResponseEntity<String> cancelExecution() {
+        formExecutionService.cancelExecution();
+        return ResponseEntity.ok("Đã nhận lệnh huỷ!");
     }
 }
