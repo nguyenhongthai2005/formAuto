@@ -4,6 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <title>Smart Google Form Filler</title>
 
     <!-- Tailwind & Font Awesome -->
@@ -613,7 +616,9 @@
 
         function normalizeString(str) {
             if (!str) return '';
-            return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+            return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                      .toLowerCase()
+                      .replace(/[^a-z0-9]/g, "");
         }
 
         function handleCSVUpload(event) {
@@ -644,13 +649,19 @@
                         if (q.type !== 'RADIO' && q.type !== 'CHECKBOX') return;
 
                         const normQTitle = normalizeString(q.title);
+                        console.log(`\n--- Phân tích câu hỏi: "${q.title}" ---`);
 
                         let matchedField = fields.find(f => normalizeString(f) === normQTitle);
                         if (!matchedField) {
-                            matchedField = fields.find(f => normalizeString(f).includes(normQTitle) || normQTitle.includes(normalizeString(f)));
+                            matchedField = fields.find(f => {
+                                let normF = normalizeString(f);
+                                if (!normF) return false;
+                                return normF.includes(normQTitle) || normQTitle.includes(normF);
+                            });
                         }
 
                         if (matchedField) {
+                            console.log(`✅ MATCHED: Đã khớp với cột CSV: "${matchedField}"`);
                             matchCount++;
                             const counts = {};
                             let respondents = 0;
@@ -669,6 +680,9 @@
                                     });
                                 }
                             });
+                            
+                            console.log(`> Tổng số người trả lời hợp lệ cho câu này: ${respondents}`);
+                            console.log(`> Dữ liệu CSV Map được:`, counts);
 
                             if (respondents > 0) {
                                 q.options.forEach(opt => {
@@ -677,13 +691,14 @@
                                     const normOptText = normalizeString(opt.text);
                                     let optVotes = 0;
                                     for (const [ansText, ansCount] of Object.entries(counts)) {
-                                        if (normalizeString(ansText) === normOptText) {
+                                        if (normalizeString(ansText) === normOptText || normalizeString(ansText) === normalizeString(opt.value)) {
                                             optVotes += ansCount;
                                         }
                                     }
                                     let percentage = (optVotes / respondents) * 100;
                                     opt.weight = Number(percentage.toFixed(2));
                                     matchedTotal += optVotes;
+                                    console.log(`  - Option [${opt.text}]: Nhận được ${optVotes} votes -> ${opt.weight}%`);
                                 });
 
                                 const otherOpt = q.options.find(o => o.value === '__other_option__');
@@ -698,9 +713,10 @@
                                     }
                                 }
                             }
+                        } else {
+                            console.warn(`❌ KHÔNG TÌM THẤY: Cột CSV cho câu hỏi "${q.title}"`);
                         }
                     });
-
                     if (matchCount > 0) {
                         alert(`Đã đồng bộ thành công ${matchCount} câu hỏi từ CSV!`);
                         renderConfigUI(globalQuestions);
